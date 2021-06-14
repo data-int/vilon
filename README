@@ -1,0 +1,21 @@
+# With the code and files provided in this folder
+# you can regenerate results for the THCA cancer
+# discussed in the corresponding publication.
+# Please open each of the stepX... scripts in
+# ascending order, and run the R code provided.
+# Step3 needs to be run via commandline with Python,
+# as specified in the corresponding file.
+# Step4 for LRACluster can be found in the LRACluster/ folder,
+# and needs to be run there.
+# There is an in-line documentation in the files.
+# Necessary folders will be generated on the fly.
+
+# You will need to install the following libraries
+# in order to be able to run the code
+
+# R
+TCGA2STAT,limma,edgeR,foreach,doMC,SNFtool,survival,coxphf,igraph,blockmodels
+
+# Python3
+snakemake
+# + listdir, os

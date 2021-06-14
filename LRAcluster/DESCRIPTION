@@ -1,0 +1,9 @@
+Package: LRAcluster
+Version: 1.0
+Date: 2015-01-06
+Title: Integrated cancer omics data analysis by low rank approximation
+Author: Dingming Wu, Dongfang Wang
+Maintainer: Dingming Wu <wdm2008@gmail.com>, Dongfang Wang <wdf13@mails.tsinghua.edu.cn>
+Depends: R (>= 3.0.0)
+Description: The LRAcluster package achieves fast and robust integrated analysis of multiple cancer omics data by the computational framework combining a probabilistic and low-rank matrix approximation
+License: GPL (>= 2)
