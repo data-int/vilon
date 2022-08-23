@@ -13,9 +13,31 @@
 # You will need to install the following libraries
 # in order to be able to run the code
 
-# R
-TCGA2STAT,limma,edgeR,foreach,doMC,SNFtool,survival,coxphf,igraph,blockmodels
-
 # Python3
 snakemake
 # + listdir, os
+
+# R
+TCGA2STAT,limma,edgeR,foreach,doMC,SNFtool,survival,coxphf,igraph,blockmodels
+
+# in case your R version does not support TCGA2STAT anymore, you can install
+# TCGA2STAT and its dependencies by putting the below code into a tcga2stats-install.R script:
+
+repo<-"https://cloud.r-project.org/";
+
+if (!require("BiocManager",quietly=TRUE)) {
+    res<-try(install.packages("BiocManager",repos=repo,quiet=TRUE));
+    if (inherits(res,'try-error')) {
+        usrlib<-Sys.getenv("R_LIBS_USER")[1];
+        cat("/== Installing into user library",usrlib,"\n");
+        dir.create(usrlib,recursive=TRUE,showWarnings=FALSE)
+        install.packages("BiocManager",lib=usrlib,repos=repo);
+        .libPaths(c(usrlib,.libPaths()));
+    }
+}
+
+BiocManager::install("CNTools");
+install.packages("https://cran.r-project.org/src/contrib/Archive/TCGA2STAT/TCGA2STAT_1.2.tar.gz")
+
+# and then, in the same folder, from command line, calling:
+R --vanilla <tcga2stats-install.R 2>&1 |tee tcga2stats-install.log
