@@ -13,6 +13,7 @@ The respective files include in-line documentation, which explains what happens 
 
 NOTE2: 
 For your convenience, the TCGA datasets analysed in this manuscript are also stored under https://bicloud.boku.ac.at/index.php/s/jAfiWriPb2tGHHN
+(pwd: nar_submission2022)
 These files include both the molecular data and clinical information, stored as an R object.
 You can download the data to a corresponding folder and skip step1_getData.ViLoN.R
 This is to ensure that even if the TCGA2STAT tool becomes outdated, you still have access to the relevant datasets.
