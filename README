@@ -50,3 +50,9 @@ install.packages("https://cran.r-project.org/src/contrib/Archive/TCGA2STAT/TCGA2
 
 ...and then, in the same folder, from command line, calling:
 R --vanilla <tcga2stats-install.R 2>&1 |tee tcga2stats-install.log
+
+##################################
+### --- COMPUTATIONAL TIME --- ###
+##################################
+
+The construction of the full network, starting from first building bipartite graphs, all the way to constructing the final patient-patient network, takes around 6h on a modern workstation (we used 36 cores).
