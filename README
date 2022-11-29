@@ -1,3 +1,12 @@
+#####################
+### -- Updates -- ###
+#####################
+
+29/11/2022: 
+An update to the GDC portal seems to have broken the TCGA2STAT library. We're working on a fix.
+In the meanwhile, you can download the relevant datasets from our storage (see: NOTE2 below).
+Note that our tool works with any manually downloaded and prepared data as well.
+
 ################################
 ### --- HOW TO RUN ViLoN --- ###
 ################################
