@@ -11,7 +11,7 @@ PNL='tools/genBPGs.pl'
 PNL_MODE='abs'
 
 ## VARIABLES ##
-CAN='THCA'
+CAN='vilon.online'
 
 INDIR='tmp/' + CAN + '/intermediate_files/normalized/'
 OUTDIR='tmp/' + CAN + '/intermediate_files/bpgs/'

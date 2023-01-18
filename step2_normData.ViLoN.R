@@ -8,13 +8,15 @@ library("edgeR")
 ## parallel execution
 library("foreach")
 library("doMC")
-ncores <- 35 # choose the number of available threads
+ncores <- 8 # choose the number of available threads
 registerDoMC(ncores) # change to your number of CPU cores
 
 ## set the main working directory
 md = 'tmp'
-can <- "THCA"
-wd <- file.path(md, can)
+## can <- Sys.getpid();
+can <- "vilon.online";
+wd <- file.path(md, can);
+dir.create(wd,recursive=T);
 setwd(wd)
 
 ###########################
@@ -141,14 +143,46 @@ limmaAvsB<-function(log2_counts,adj.method='BY',eB=TRUE,proportion=0.01) {
 ## -- main script -- ##
 
 ## collect info
-can <- "THCA"
-dataTypes <- c("rnaseq", "meth", "cnvsnp") # rnaseq not-loged
-nData <- 1:length(dataTypes) # location of each new data type data
-dataTypesVoom <- c(1, 0, 0) # which data should be Voom-TMM normalized
-
 datDir <- 'intermediate_files/'
-file=paste0(datDir, paste(dataTypes, collapse='.'),".T.comPatients.",can,".rda") 
-Data <- lapply(file, function(x) mget(load(x))) # load(file)
+
+files <- dir(datDir,ignore.case=T,pattern="*.csv");
+fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
+isClinical <- grepl("clinical",fileTypes,ignore.case=T);
+dataTypes <- fileTypes[!isClinical];
+nData <- 1:length(dataTypes) # location of each new data type data
+dataTypesVoom <- ifelse(grepl("rna-?seq",dataTypes,ignore.case=T),1,0);
+names(dataTypesVoom) <- dataTypes;
+## which data should be Voom-TMM normalized
+
+Data<-list();
+for (i in seq(length(fileTypes))) {
+    if (isClinical[i]) {
+        cat("Reading clinical survival data from",files[i],"\n");
+        Data[["clinicalData"]] <- try(read.csv(file.path(datDir,files[i]),
+                                               head=T));
+    } else {
+        cat("Reading",fileTypes[i],"data from",files[i],
+            ifelse(dataTypesVoom[fileTypes[i]]>0,
+                   "for Voom/TMM normalization\n","\n"));
+        Data[[paste0(fileTypes[i],"T")]] <- try(read.csv(file.path(datDir,
+                                                                   files[i]),
+                                                         head=T));
+    }
+}
+if (any(sapply(Data,function(le){inherits(le, "try-error")}))) {
+    stop("Error reading CSV input files - aborting.");
+}
+
+cfgTable <- as.data.frame(t(read.table("config.txt",sep="\t",row.names=1,
+                                       col.names=c("NULL","value"))));
+
+cachefile=paste0(datDir,
+                 paste(dataTypes, collapse='.'),
+                 ".T.comPatients.",can,".rda");
+dataenv <- as.environment(Data);
+save(list=ls(dataenv),file=cachefile,envir=dataenv);
+rm(dataenv);
+
 
 ## create output directory
 outDir  <- file.path(datDir, 'normalized/')
@@ -161,8 +195,8 @@ for (n in nData) {
     type <- dataTypes[i]
     useVoom <- dataTypesVoom[i]
 
-    datA.All <- Data[[1]][[n]]   # cancer data
-    datB.All <- Data[[1]][[n]]   # control data [CANCER]
+    datA.All <- Data[[n]]   # cancer data
+    datB.All <- Data[[n]]   # control data [CANCER]
     
     ## remove duplicated names (unmappable to PWs); can happen for some data types
     datA.All <- datA.All[!duplicated(rownames(datA.All)), ]

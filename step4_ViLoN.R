@@ -70,7 +70,7 @@ threads <- 1 # more threads do not seem to make the method run faster
 ## Parallel execution params ##
 library(foreach)
 library(doMC)                   # backend for running 'foreach' in parallel
-cores <- 30/threads             # change to number of available CPU cores
+cores <- 8/threads              # change to number of available CPU cores
 registerDoMC(cores)             # register the doMC parallel backend
 
 ##############################
