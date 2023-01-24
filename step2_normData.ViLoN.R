@@ -8,8 +8,6 @@ library("edgeR")
 ## parallel execution
 library("foreach")
 library("doMC")
-ncores <- 8 # choose the number of available threads
-registerDoMC(ncores) # change to your number of CPU cores
 
 ## set the main working directory
 md = 'tmp'
@@ -18,6 +16,17 @@ can <- "vilon.online";
 wd <- file.path(md, can);
 dir.create(wd,recursive=T);
 setwd(wd)
+
+datDir <- 'intermediate_files/'
+
+metafile <- paste0(datDir,"meta",".T.comPatients.",can,".rda");
+cat("Loading",metafile,"\n");
+load(metafile);
+
+## could in the future set and get this from cfgTable:
+ncores <- 8 # choose the number of available threads
+registerDoMC(ncores) # change to your number of CPU cores
+
 
 ###########################
 ## -- load functioons -- ##
@@ -143,46 +152,9 @@ limmaAvsB<-function(log2_counts,adj.method='BY',eB=TRUE,proportion=0.01) {
 ## -- main script -- ##
 
 ## collect info
-datDir <- 'intermediate_files/'
-
-files <- dir(datDir,ignore.case=T,pattern="*.csv");
-fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
-isClinical <- grepl("clinical",fileTypes,ignore.case=T);
-dataTypes <- fileTypes[!isClinical];
-nData <- 1:length(dataTypes) # location of each new data type data
-dataTypesVoom <- ifelse(grepl("rna-?seq",dataTypes,ignore.case=T),1,0);
-names(dataTypesVoom) <- dataTypes;
-## which data should be Voom-TMM normalized
-
-Data<-list();
-for (i in seq(length(fileTypes))) {
-    if (isClinical[i]) {
-        cat("Reading clinical survival data from",files[i],"\n");
-        Data[["clinicalData"]] <- try(read.csv(file.path(datDir,files[i]),
-                                               head=T));
-    } else {
-        cat("Reading",fileTypes[i],"data from",files[i],
-            ifelse(dataTypesVoom[fileTypes[i]]>0,
-                   "for Voom/TMM normalization\n","\n"));
-        Data[[paste0(fileTypes[i],"T")]] <- try(read.csv(file.path(datDir,
-                                                                   files[i]),
-                                                         head=T));
-    }
-}
-if (any(sapply(Data,function(le){inherits(le, "try-error")}))) {
-    stop("Error reading CSV input files - aborting.");
-}
-
-cfgTable <- as.data.frame(t(read.table("config.txt",sep="\t",row.names=1,
-                                       col.names=c("NULL","value"))));
-
-cachefile=paste0(datDir,
-                 paste(dataTypes, collapse='.'),
-                 ".T.comPatients.",can,".rda");
-dataenv <- as.environment(Data);
-save(list=ls(dataenv),file=cachefile,envir=dataenv);
-rm(dataenv);
-
+cachefile <- paste0(datDir, paste(dataTypes, collapse='.'),".T.comPatients.",
+                    can,".rda");
+Data <- lapply(cachefile, function(x) mget(load(x)));
 
 ## create output directory
 outDir  <- file.path(datDir, 'normalized/')
