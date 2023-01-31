@@ -7,20 +7,24 @@ from os import listdir
 from os.path import isfile, join
 
 ## PROGZ ##
-PNL='tools/genBPGs.pl'
+PNL='~/ViLoN/src/tools/genBPGs.pl'
 PNL_MODE='abs'
 
 ## VARIABLES ##
 CAN='vilon.online'
 
-INDIR='tmp/' + CAN + '/intermediate_files/normalized/'
-OUTDIR='tmp/' + CAN + '/intermediate_files/bpgs/'
+## ##INDIR='tmp/' + CAN + '/intermediate_files/normalized/'
+## ##OUTDIR='tmp/' + CAN + '/intermediate_files/bpgs/'
+## INDIR='/intermediate_files/normalized/'
+## OUTDIR='/intermediate_files/bpgs/'
+INDIR='normalized/'
+OUTDIR='bpgs/'
 
 INFILES = [f for f in listdir(INDIR) if isfile(join(INDIR, f))]
 INFILES = ''.join(INFILES).replace('.P.rnk', ' ').split()
 
-KEGG='data/c2.cp.kegg.v6.0.symbols.tsv'
-GO='data/c5.bp.v6.0.symbols.tsv'
+KEGG='./data/c2.cp.kegg.v6.0.symbols.tsv'
+GO='./data/c5.bp.v6.0.symbols.tsv'
 
 ########################
 ### --- WORKFLOW --- ###

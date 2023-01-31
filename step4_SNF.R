@@ -1,4 +1,15 @@
-#install.packages("SNFtool")
+##setwd("/bi/ala/scratch/bibot/ViLoN/cab24f41e52f2bb88d001395e23e640b")
+can <- "vilon.online"
+##datDir <- paste0('tmp/',can,'/intermediate_files/')
+datDir <- paste0('./')
+metafile <- paste0("meta",".T.comPatients.",can,".rda");
+cat("Loading",metafile,"\n");
+load(metafile); ## cfgTable, dataTypes, nData, dataTypesVoom
+
+
+if (cfgTable$online.snf=="snf"){
+
+                                        #install.packages("SNFtool")
 library("SNFtool")
 library("edgeR")
 
@@ -11,14 +22,8 @@ alpha = 0.5;  	# hyperparameter, usually (0.3~0.8)
 T = 10; 	# Number of Iterations, usually (10~20)
 
 
-can <- "vilon.online"
-datDir <- paste0('tmp/',can,'/intermediate_files/')
-
-files <- dir(datDir,ignore.case=T,pattern="*.csv");
-fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
-isClinical <- grepl("clinical",fileTypes,ignore.case=T);
-dataTypes <- fileTypes[!isClinical];
-nData <- 1:length(dataTypes) # location of each new data type data
+results <- file.path(datDir, "results")
+dir.create(results,recursive=T)
 
 file=paste0(datDir, paste(dataTypes, collapse='.'),".T.comPatients.",can,".rda")
 load(file,Data <- new.env())
@@ -27,7 +32,7 @@ Data <- as.list(Data)
 if ("clinicalData" %in% names(Data)){
 
 ## Clinical information
-clinical <- clinicalData
+clinical <- Data$clinicalData
 clinical[is.na(clinical[,"daystolastfollowup"]),"daystolastfollowup"] = clinical[is.na(clinical[,"daystolastfollowup"]),"daystodeath"]
 clinical[clinical[,"gender"]=="male","gender"] = clinical[clinical[,"gender"]=="male","gender"]=1
 clinical[clinical[,"gender"]=="female","gender"] = clinical[clinical[,"gender"]=="female","gender"]=2
@@ -40,13 +45,17 @@ clinical <- data.frame(sample=rownames(clinical),
                        sex=as.numeric(clinical[,"gender"]),
                        age=as.numeric(clinical[,"yearstobirth"]),
                        stage=(clinical[,"pathologicstage"]))
-clinical <- clinical[!is.na(clinical$time),]
-rownames(clinical) <- clinical$sample
-    samClinical <- rownames(clinical)
+    clinical <- clinical[!is.na(clinical$time),]
+    clinical <- clinical[!clinical$time <= 0,]
     library("survival")
     library("coxphf")
-    complete <- samClinical ##intersect(samClinical, samAll)
+    rownames(clinical) <- sapply(clinical$sample,function(n){gsub("[-]",".",n)},USE.NAMES=F)
+    samClinical <- rownames(clinical)
+    samAll <- colnames(Data[[1]])
+    samClinical <- intersect(samClinical, samAll)
+    complete <- samClinical
     clinTemplate <- clinical[complete,]
+  
 } else{
     ## Data is of size n x d_i, where n is the number of patients, d_i is the number of genes / methylated points
     samClinical <- rownames(t(Data[[paste0(dataTypes[1],"T")]]))
@@ -69,7 +78,9 @@ dataInt <- dataTypes ##c("rnaseq", "meth")
 ##Data1 = standardNormalization(Data1);
 ##Data2 = standardNormalization(Data2);
 
-normData <- lapply(Data[paste0(dataTypes,"T")],function(d){standardNormalization(t(d))})
+normData <- lapply(Data[paste0(dataTypes,"T")],function(d){
+    standardNormalization(t(d[,complete]))
+})
 
 ## Calculate the pair-wise distance; If the data is continuous, we recommend to use the function "dist2" as follows; if the data is discrete, we recommend the users to use ""
 ##Dist1 = dist2(as.matrix(Data1),as.matrix(Data1));
@@ -95,22 +106,22 @@ W = SNF(distData, K, T)
 
 ### --- survival analysis --- ###
 
-
-cfgTable <- as.data.frame(t(read.table(paste0('tmp/',can,"/config.txt"),sep="\t",row.names=1,
-                                       col.names=c("NULL","value"))));
-
-minC <- as.numeric(levels(cfgTable$online.kmin))
-maxC <- as.numeric(levels(cfgTable$online.kmax))
+minC <- as.numeric(cfgTable$online.kmin)
+maxC <- as.numeric(cfgTable$online.kmax)
 
 ## don't trust Firth cox when there are warnings
 opt.prev<-options(warn=2);
 ## test for the optimal #C
 fits<-list(int=list());
 cns<-minC:maxC;
+int.strat <- NULL
 for (cn in cns) {
     comm.SNF.int = spectralClustering(W, cn);
     comm.SNF <- data.frame(sample=colnames(distData[[1]]), int=comm.SNF.int)
     rownames(comm.SNF) <- comm.SNF$sample
+    write.table(comm.SNF,file=paste0(results,"/integrated_stratification_SNF.",cn,".clusters.csv"),row.names=F,sep=",", dec=".",quote=F)
+
+    if ("clinicalData" %in% names(Data)){
     ## make sure both objects have the same aptient order
     dat <- clinTemplate[rownames(comm.SNF),]
     dat <- cbind(dat, comm.SNF$int)
@@ -120,10 +131,7 @@ for (cn in cns) {
     maxSam <- which(table(dat$int) == max(table(dat$int)))
     dat$intF <- relevel(dat$intF, ref=maxSam[1])
 
-    write.table(dat,file="./integrated_stratification_SNF.csv",sep=",", dec=".", quote=T)
 #    save(dat, file=paste0("patientGroups/SNF.", can, ".", paste(dataInt, collapse='.'), ".clusters", cn, ".Rda"))
-    
-    if ("clinicalData" %in% names(Data)){
         ## run the analyses
         nevent <- sum(clinTemplate$censor)
         fits[['int'   ]][[cn]] <- list(try(coxphf(Surv(time, status)~intF, data=dat)));
@@ -137,8 +145,8 @@ if ("clinicalData" %in% names(Data)){
     ##pvalThr <- 1
     ##probThr <- 0.05 # for selecting factors
 
-    pvalThr <- as.numeric(levels(cfgTable$online.pmodel))
-    probThr <- as.numeric(levels(cfgTable$online.ppairwise))
+    pvalThr <- as.numeric(cfgTable$online.pmodel)
+    probThr <- as.numeric(cfgTable$online.ppairwise)
     stats<-NULL;
     for (fn in names(fits)) {
         myfits<-fits[[fn]][cns];
@@ -189,12 +197,13 @@ if ("clinicalData" %in% names(Data)){
             if (is.null(stats)) stats<-data.frame(t(my.stats),stringsAsFactors=FALSE) else stats<-rbind(stats,my.stats);
         }
     }
-    stats$fullSize <- dim(Data1)[1]
+    stats$fullSize <- dim(t(Data$rnaseqT))[1] ## had to transpose?
     met <- 'SNF'
     stats$meth <- met
-    write.table(stats,file="./significant_model_results_SNF.csv",sep=",", dec=".", quote=T)
 
     dTypes <- paste(dataInt, collapse = ".")
     rdaNam <- paste0(can, "_", dTypes, "-int.", met)
     save(stats, file=paste0(rdaNam, ".Rda"))
+}
+
 }

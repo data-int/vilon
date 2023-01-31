@@ -5,25 +5,29 @@
 library("foreach")
 library("doMC")
 
-## set the main working directory
-md = 'tmp'
+## ## set the main working directory
+## md = 'tmp'
 can <- "vilon.online"
-wd <- file.path(md, can)
-dir.create(wd,recursive=T)
-setwd(wd)
+## wd <- file.path(md, can)
+## dir.create(wd,recursive=T)
+## setwd(wd)
 
 cfgTable <- as.data.frame(t(read.table("config.txt",sep="\t",row.names=1,
                                        col.names=c("NULL","value"))));
 
-ncores <- 8 # choose the number of available threads
+ncores <- as.numeric(cfgTable$online.cores);
+if (length(ncores)!=1) 
+    ncores <- 8 # choose the number of available threads
 registerDoMC(ncores) # change to your number of CPU cores
+cat("Using",ncores,"cores\n");
 
 
 #######################
 ## -- main script -- ##
 
 ## collect info
-datDir <- 'intermediate_files/'
+## datDir <- 'intermediate_files/'
+datDir <- './'
 
 files <- dir(datDir,ignore.case=T,pattern="*.csv");
 fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
@@ -40,6 +44,7 @@ for (i in seq(length(fileTypes))) {
         cat("Reading clinical survival data from",files[i],"\n");
         Data[["clinicalData"]] <- try(read.csv(file.path(datDir,files[i]),
                                                head=T));
+        cfgTable[["online.clinical"]] <- TRUE;
     } else {
         cat("Reading",fileTypes[i],"data from",files[i],
             ifelse(dataTypesVoom[fileTypes[i]]>0,
@@ -52,6 +57,7 @@ for (i in seq(length(fileTypes))) {
 if (any(sapply(Data,function(le){inherits(le, "try-error")}))) {
     stop("Error reading CSV input files - aborting.");
 }
+
 
 
 cachefile <- paste0(datDir,

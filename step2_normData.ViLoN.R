@@ -9,23 +9,26 @@ library("edgeR")
 library("foreach")
 library("doMC")
 
-## set the main working directory
-md = 'tmp'
-## can <- Sys.getpid();
+## ## set the main working directory
+## md = 'tmp'
+## ## can <- Sys.getpid();
 can <- "vilon.online";
-wd <- file.path(md, can);
-dir.create(wd,recursive=T);
-setwd(wd)
+## wd <- file.path(md, can);
+## dir.create(wd,recursive=T);
+## setwd(wd)
 
-datDir <- 'intermediate_files/'
+## datDir <- 'intermediate_files/'
+datDir <- './'
 
 metafile <- paste0(datDir,"meta",".T.comPatients.",can,".rda");
 cat("Loading",metafile,"\n");
 load(metafile);
 
-## could in the future set and get this from cfgTable:
-ncores <- 8 # choose the number of available threads
+ncores <- as.numeric(cfgTable$online.cores);
+if (length(ncores)!=1) 
+    ncores <- 8 # choose the number of available threads
 registerDoMC(ncores) # change to your number of CPU cores
+cat("Using",ncores,"cores\n");
 
 
 ###########################
@@ -154,6 +157,7 @@ limmaAvsB<-function(log2_counts,adj.method='BY',eB=TRUE,proportion=0.01) {
 ## collect info
 cachefile <- paste0(datDir, paste(dataTypes, collapse='.'),".T.comPatients.",
                     can,".rda");
+cat("Loading",cachefile,"\n");
 Data <- lapply(cachefile, function(x) mget(load(x)));
 
 ## create output directory
@@ -166,9 +170,14 @@ for (n in nData) {
     i <- which(n==nData)
     type <- dataTypes[i]
     useVoom <- dataTypesVoom[i]
+    cat("Data type",type,
+        ifelse(useVoom>0,
+               "count data for Voom/TMM\n",
+               "for no extra normalization (used as loaded)\n"));
 
-    datA.All <- Data[[n]]   # cancer data
-    datB.All <- Data[[n]]   # control data [CANCER]
+    n <- paste0(dataTypes[n],"T");
+    datA.All <- Data[[1]][[n]]   # cancer data
+    datB.All <- Data[[1]][[n]]   # control data [CANCER]
     
     ## remove duplicated names (unmappable to PWs); can happen for some data types
     datA.All <- datA.All[!duplicated(rownames(datA.All)), ]
@@ -222,7 +231,12 @@ for (n in nData) {
         final$P[is.na(final$P)] <- 1
         final.rank <- data.frame(ID=final$ID, P=final$P)
         final.rank <- final.rank[order(final.rank$P, decreasing=TRUE),]
-        write.table(final.rank, file = paste0(outDir, can, ".", type, ".", method, ".1t_nt.", nam, ".prior01.P.rnk"), quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
+        fnam <- paste0(outDir, can, ".", type, ".", method, ".1t_nt.", nam,
+                       ".prior01.P.rnk");
+        cat("Writing",fnam,"\n");
+        write.table(final.rank, file = fnam, sep = "\t",
+                    quote = FALSE, row.names = FALSE, col.names = FALSE)
     }
 }
 
+cat("Step 2 - norm data - done.\n");

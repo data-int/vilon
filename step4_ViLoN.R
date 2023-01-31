@@ -17,13 +17,20 @@ library(blockmodels)           # for SBM methods (instead of Wmixnet; same autho
 
 ### Clinical information
 can <- "vilon.online"
-datDir <- paste0('tmp/',can,'/intermediate_files/')
+##datDir <- paste0('tmp/',can,'/intermediate_files/')
+datDir <- paste0('./')
+results <- file.path(datDir, "results")
+dir.create(results,recursive=T)
 
-files <- dir(datDir,ignore.case=T,pattern="*.csv");
-fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
-isClinical <- grepl("clinical",fileTypes,ignore.case=T);
-dataTypes <- fileTypes[!isClinical];
-nData <- 1:length(dataTypes) # location of each new data type data
+##files <- dir(datDir,ignore.case=T,pattern="*.csv");
+##fileTypes <- sub(".*[.]","",sub("[.]csv","",files,ignore.case=T));
+##isClinical <- grepl("clinical",fileTypes,ignore.case=T);
+##dataTypes <- fileTypes[!isClinical];
+##nData <- 1:length(dataTypes) # location of each new data type data
+
+metafile <- paste0(datDir,"meta",".T.comPatients.",can,".rda");
+cat("Loading",metafile,"\n");
+load(metafile); ## cfgTable, dataTypes, nData, dataTypesVoom
 
 file=paste0(datDir, paste(dataTypes, collapse='.'),".T.comPatients.",can,".rda")
 load(file,Data <- new.env())
@@ -44,16 +51,20 @@ if ("clinicalData" %in% names(Data)){
     clinical <- clinical[!is.na(clinical$censor),]
     clinical <- clinical[!clinical$time <= 0,]
 
-    rownames(clinical) <- clinical$sample
-  ##  samClinical <- rownames(clinical)
-}
-samClinical <- rownames(t(Data[[paste0(dataTypes[1],"T")]]))
+    rownames(clinical) <- sapply(clinical$sample,function(n){gsub("[-]",".",n)},USE.NAMES=F)
+    samClinical <- rownames(clinical)
+    samAll <- colnames(Data[[1]])
+    samClinical <- intersect(samClinical, samAll)
+}else{
+    samClinical <- colnames(Data[[1]])
+    }
 
 
 ## General params, bipartite graphs ##
-netDir <- paste0('tmp/', can, '/intermediate_files/bpgs/')
+##netDir <- paste0('tmp/', can, '/intermediate_files/bpgs/')
+netDir <- paste0('./bpgs/')
 netSuffix <- ".prior01.bpg"            # bipartite graphs of KEGG-GO-KEGG connected via genes
-nodeNames <- read.table("data/c2.cp.kegg.v6.0.symbols.ids", stringsAsFactors=FALSE)[,1]
+nodeNames <- read.table("./data/c2.cp.kegg.v6.0.symbols.ids", stringsAsFactors=FALSE)[,1]
 
 ## Prepare data ##
 # list all the input files (per patient, per data type)
@@ -70,7 +81,7 @@ for (d in dataTypes) {
         complete <- c(complete, files[grepl(nam, files)])
     }
     files <- complete
-    ##patients <- 5
+    ##patients <- 30
     ##sel <- sample(length(files), patients)  # in case we want to make a smaller network (e.g., for testing)
     sel <- 1:length(files) 
     allData[[i]] <- files[sel] # data types need to be matched via patients
@@ -89,7 +100,11 @@ threads <- 1 # more threads do not seem to make the method run faster
 ## Parallel execution params ##
 library(foreach)
 library(doMC)                   # backend for running 'foreach' in parallel
-cores <- 8/threads              # change to number of available CPU cores
+
+ncores <- as.numeric(cfgTable$online.cores);
+if (length(ncores)!=1) 
+    ncores <- 8 # choose the number of available threads
+cores <- ncores/threads         # change to number of available CPU cores
 registerDoMC(cores)             # register the doMC parallel backend
 
 ##############################
@@ -108,11 +123,9 @@ names(ppClust) <- c(dataTypes)
 
 ## force a specific # of clusterings to make the analysis computable in a reasonable time
 # VI can compare groups with different # of clusterings so we can just take the best ICL per patient
-cfgTable <- as.data.frame(t(read.table(paste0('tmp/',can,"/config.txt"),sep="\t",row.names=1,
-                                       col.names=c("NULL","value"))));
 
-minC <- as.numeric(levels(cfgTable$online.kmin))
-maxC <- as.numeric(levels(cfgTable$online.kmax)) #Inf # to allow for automated selection
+minC <- as.numeric(cfgTable$online.kmin)
+maxC <- as.numeric(cfgTable$online.kmax) #Inf # to allow for automated selection
 
 for (d in 1:length(dataTypes)) {
     
@@ -129,7 +142,7 @@ for (d in 1:length(dataTypes)) {
 
     ### first patient ###
     file <- data[i]
-    p1 <- tail(unlist(strsplit(file, "[.]")), n=1) # id of a patient
+    p1 <- paste(tail(unlist(strsplit(file, "[.]")), n=3),collapse=".") # id of a patient
     
     # create an adjacency matrix from patient's bipartite graph
     dat1 <- as.matrix(read.table(paste0(netDir, "/", file, netSuffix), sep="\t", head=F, fill=TRUE, stringsAsFactors=FALSE))
@@ -278,7 +291,10 @@ adj <- lapply(adj, function(x) x[samData, samData])
 clustMet <- c("spectrClust", "SBM")[2]
 
 dataSel <- dataTypes 
-
+library("survival")
+library("coxphf")
+## methods: SNF (some functions)
+library("SNFtool")
 ## don't trust Firth cox when there are warnings
 opt.prev<-options(warn=2);
 fits <- list(int=list());
@@ -286,8 +302,8 @@ cns<-minC:maxC;
 for (cn in cns) {
     patientGroups <- list()
     nodeNames <- rownames(adj$int)
-    minC <- cn
-    maxC <- cn
+    ## minC <- cn ## cn same for both min and max
+    ## maxC <- cn ## cn same for both min and max
     ##for (d in 1:length(dataSetups)) {
     d <- 1; ## there is only 1 data setup - int
     nam <- dataSetups[d]
@@ -295,7 +311,7 @@ for (cn in cns) {
 
     if (clustMet == "SBM") {
         ## group patients using SBM
-        res <- BM_gaussian(membership_type='SBM', adj=dat, verbosity=0, autosave='', plotting='', exploration_factor=1.5, explore_min=minC, explore_max=maxC, ncores=threads)
+        res <- BM_gaussian(membership_type='SBM', adj=dat, verbosity=0, autosave='', plotting='', exploration_factor=1.5, explore_min=cn, explore_max=cn, ncores=threads)
         res$estimate()            
         ## select the optimal number of clusters
         selOpt <- cn           
@@ -309,13 +325,8 @@ for (cn in cns) {
         C <- cn
         comm = spectralClustering(dat, C); # the final subtypes information
     }
-
+    
     if ("clinicalData" %in% names(Data)){        
-        library("survival")
-        library("coxphf")
-        ## methods: SNF (some functions)
-        library("SNFtool")
-        
         ## nodes are now the patients (previously pathways)
         clinTemplate <- clinical[nodeNames,] 
         nevent <- sum(clinTemplate$censor) 
@@ -342,6 +353,7 @@ for (cn in cns) {
         dat$intF <- as.factor(dat$int);
         maxSam <- which(table(dat$int) == max(table(dat$int)))
         dat$intF <- relevel(dat$intF, ref=maxSam[1])
+        dat <- dat[!is.na(dat$status),]
 
                                         #    save(dat, file=paste0("patientGroups/VLN.", can, ".", paste(dataInt, collapse='.'), ".clusters", cn, ".Rda"))
         
@@ -349,11 +361,10 @@ for (cn in cns) {
         fits[['int'   ]][[cn]] <- list(try(coxphf(Surv(time, status)~intF, data=dat)));
         fits[['int'   ]][[cn]][[2]] <- table(dat$intF)
 
-        write.table(clustering,file="./integrated_stratification_vilon.csv",sep=",", dec=".", quote=T)
+      write.table(clustering,file=paste0(results,"/integrated_stratification_ViLoN.",cn,".clusters.csv"),sep=",", dec=".", quote=T)
     } else{
-        write.table(clustering,file="./integrated_stratification_vilon.csv",sep=",", dec=".", quote=T)
-    }
-    
+      write.table(clustering,file=paste0(results,"/integrated_stratification_ViLoN.",cn,".clusters.csv"),sep=",", dec=".", quote=T)
+    }   
 }
 
 
@@ -362,8 +373,8 @@ if ("clinicalData" %in% names(Data)){
     ##pvalThr <- 1
     ##probThr <- 0.05 # for selecting factors
 
-    pvalThr <- as.numeric(levels(cfgTable$online.pmodel))
-    probThr <- as.numeric(levels(cfgTable$online.ppairwise))
+    pvalThr <- as.numeric(cfgTable$online.pmodel)
+    probThr <- as.numeric(cfgTable$online.ppairwise)
 
     stats<-NULL;
     for (fn in names(fits)) {
@@ -418,7 +429,6 @@ if ("clinicalData" %in% names(Data)){
     stats$fullSize <- nPatients
     met <- 'ViLoN'
     stats$meth <- met
-    write.table(stats,file="./significant_model_results_vilon.csv",sep=",", dec=".", quote=T)
 
     dTypes <- paste(dataInt, collapse = ".")
     rdaNam <- paste0(can, "_", dTypes, "-int.", met)
